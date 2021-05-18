@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Loadables.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">starts-core</a> &gt; <a href="index.source.html" class="el_package">edu.illinois.starts.helpers</a> &gt; <span class="el_source">Loadables.java</span></div><h1>Loadables.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2015 - Present. The STARTS Team. All Rights Reserved.
+ */
+
+package edu.illinois.starts.helpers;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.Level;
+
+import edu.illinois.starts.constants.StartsConstants;
+import edu.illinois.starts.util.ChecksumUtil;
+import edu.illinois.starts.util.Logger;
+import edu.illinois.yasgl.DirectedGraph;
+import edu.illinois.yasgl.DirectedGraphBuilder;
+import org.apache.maven.surefire.booter.Classpath;
+import org.ekstazi.util.Types;
+
+/**
+ * Utility methods for loading several things from disk.
+ */
+public class Loadables implements StartsConstants {
+<span class="fc" id="L29">    private static final Logger LOGGER = Logger.getGlobal();</span>
+
+    Map&lt;String, Set&lt;String&gt;&gt; deps;
+    List&lt;String&gt; extraEdges;
+    private List&lt;String&gt; classesToAnalyze;
+    private File cache;
+    private String sfPathString;
+    private DirectedGraph&lt;String&gt; graph;
+    private Map&lt;String, Set&lt;String&gt;&gt; transitiveClosure;
+    private Set&lt;String&gt; unreached;
+    private boolean filterLib;
+    private boolean useThirdParty;
+    private Classpath surefireClasspath;
+    private String artifactsDir;
+
+    public Loadables(List&lt;String&gt; classesToAnalyze, String artifactsDir, String sfPathString,
+<span class="fc" id="L45">                     boolean useThirdParty, boolean filterLib, File cache) {</span>
+<span class="fc" id="L46">        this.classesToAnalyze = classesToAnalyze;</span>
+<span class="fc" id="L47">        this.artifactsDir = artifactsDir;</span>
+<span class="fc" id="L48">        this.sfPathString = sfPathString;</span>
+<span class="fc" id="L49">        this.filterLib = filterLib;</span>
+<span class="fc" id="L50">        this.cache = cache;</span>
+<span class="fc" id="L51">        this.useThirdParty = useThirdParty;</span>
+<span class="fc" id="L52">    }</span>
+
+    public DirectedGraph&lt;String&gt; getGraph() {
+<span class="fc" id="L55">        return graph;</span>
+    }
+
+    public Map&lt;String, Set&lt;String&gt;&gt; getTransitiveClosure() {
+<span class="fc" id="L59">        return transitiveClosure;</span>
+    }
+
+    public Set&lt;String&gt; getUnreached() {
+<span class="fc" id="L63">        return unreached;</span>
+    }
+
+    public List&lt;String&gt; getClasspathWithNoJars() {
+        // There is a cache of all third party libraries, remove third-party jars from jdeps classpath
+        // ASSUMPTION: local dependencies (modules in the same mvn project) are directories, not jars
+<span class="fc" id="L69">        List&lt;String&gt; localPaths = new ArrayList&lt;&gt;();</span>
+<span class="pc bpc" id="L70" title="1 of 2 branches missed.">        if (surefireClasspath != null) {</span>
+<span class="fc bfc" id="L71" title="All 2 branches covered.">            for (String path : surefireClasspath.getClassPath()) {</span>
+<span class="pc bpc" id="L72" title="1 of 4 branches missed.">                if (!path.endsWith(JAR_EXTENSION) &amp;&amp; new File(path).exists()) {</span>
+<span class="fc" id="L73">                    localPaths.add(path);</span>
+                }
+<span class="fc" id="L75">            }</span>
+        }
+<span class="fc" id="L77">        return localPaths;</span>
+    }
+
+    public Loadables create(List&lt;String&gt; moreEdges, Classpath sfClassPath,
+                            boolean computeUnreached) {
+<span class="fc" id="L82">        setSurefireClasspath(sfClassPath);</span>
+<span class="fc" id="L83">        LOGGER.log(Level.FINEST, &quot;More: &quot; + moreEdges.size());</span>
+<span class="fc" id="L84">        extraEdges = moreEdges;</span>
+<span class="fc" id="L85">        long startTime = System.currentTimeMillis();</span>
+<span class="fc" id="L86">        deps = getDepMap(sfPathString, classesToAnalyze);</span>
+<span class="fc" id="L87">        long jdepsTime = System.currentTimeMillis();</span>
+<span class="fc" id="L88">        graph = makeGraph(deps, extraEdges);</span>
+<span class="fc" id="L89">        long graphBuildingTime = System.currentTimeMillis();</span>
+<span class="fc" id="L90">        transitiveClosure = getTransitiveClosurePerClass(graph, classesToAnalyze);</span>
+<span class="fc" id="L91">        long transitiveClosureTime = System.currentTimeMillis();</span>
+<span class="pc bpc" id="L92" title="1 of 2 branches missed.">        if (computeUnreached) {</span>
+<span class="fc" id="L93">            unreached = findUnreached(deps, transitiveClosure);</span>
+<span class="fc" id="L94">            LOGGER.log(Level.INFO, &quot;UNREACHED(count): &quot; + unreached.size());</span>
+        }
+<span class="fc" id="L96">        long findUnreachedTime = System.currentTimeMillis();</span>
+<span class="fc" id="L97">        long endTime = System.currentTimeMillis();</span>
+<span class="fc" id="L98">        LOGGER.log(Level.FINE, &quot;[PROFILE] createLoadable(runJDeps): &quot; + Writer.millsToSeconds(jdepsTime - startTime));</span>
+<span class="fc" id="L99">        LOGGER.log(Level.FINE, &quot;[PROFILE] createLoadable(buildGraph): &quot;</span>
+<span class="fc" id="L100">                + Writer.millsToSeconds(graphBuildingTime - jdepsTime));</span>
+<span class="fc" id="L101">        LOGGER.log(Level.FINE, &quot;[PROFILE] createLoadable(transitiveClosure): &quot;</span>
+<span class="fc" id="L102">                + Writer.millsToSeconds(transitiveClosureTime - graphBuildingTime));</span>
+<span class="fc" id="L103">        LOGGER.log(Level.FINE, &quot;[PROFILE] createLoadable(findUnreached): &quot;</span>
+<span class="fc" id="L104">                + Writer.millsToSeconds(endTime - findUnreachedTime));</span>
+<span class="fc" id="L105">        LOGGER.log(Level.FINE, &quot;[PROFILE] createLoadable(TOTAL): &quot; + Writer.millsToSeconds(endTime - startTime));</span>
+<span class="fc" id="L106">        LOGGER.log(Level.INFO, &quot;STARTS:Nodes: &quot; + graph.getVertices().size());</span>
+<span class="fc" id="L107">        LOGGER.log(Level.INFO, &quot;STARTS:Edges: &quot; + graph.getEdges().size());</span>
+<span class="fc" id="L108">        return this;</span>
+    }
+
+    /**
+     * This method takes (i) the dependencies that jdeps found and (i) the map from tests to reachable
+     * types in the graph, and uses these to find types jdeps found but which are not reachable by any test.
+     * @param deps      The dependencies that jdeps found.
+     * @param testDeps  The map from test to types that can be reached in the graph.
+     * @return          The set of types that are not reachable by any test in the graph.
+     */
+    private Set&lt;String&gt; findUnreached(Map&lt;String, Set&lt;String&gt;&gt; deps,
+                                      Map&lt;String, Set&lt;String&gt;&gt; testDeps) {
+<span class="fc" id="L120">        Set&lt;String&gt; allClasses = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L121" title="All 2 branches covered.">        for (String loc : deps.keySet()) {</span>
+            // 1. jdeps finds no dependencies for a class if the class' dependencies were not analyzed (e.g., no -R)
+            // 2. every class in the CUT has non-empty jdeps dependency; they , at least, depend on java.lang.Object
+            // 3. isWellKnownUrl will ignore classes from junit, hamcrest, maven, etc; we don't want to track those
+            // 4. isIgnorableInternalName will ignore classes from standard library, mockito, jacoco
+<span class="fc" id="L126">            String className = ChecksumUtil.toClassName(loc);</span>
+<span class="pc bpc" id="L127" title="1 of 2 branches missed.">            if (!deps.get(loc).isEmpty()</span>
+<span class="nc bnc" id="L128" title="All 2 branches missed.">                    || !ChecksumUtil.isWellKnownUrl(className)</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">                    || !Types.isIgnorableInternalName(className)) {</span>
+                // this means that this a class we want to track, either because it is in the CUT
+                // or in some jar that we are tracking
+<span class="fc" id="L132">                allClasses.add(loc);</span>
+            }
+<span class="fc" id="L134">        }</span>
+<span class="fc" id="L135">        LOGGER.log(Level.INFO, &quot;ALL(count): &quot; + allClasses.size());</span>
+<span class="fc" id="L136">        Set&lt;String&gt; reached = new HashSet&lt;&gt;(testDeps.keySet());</span>
+<span class="fc bfc" id="L137" title="All 2 branches covered.">        for (String test : testDeps.keySet()) {</span>
+<span class="fc" id="L138">            reached.addAll(testDeps.get(test));</span>
+<span class="fc" id="L139">        }</span>
+        // remove the reached classes from allClasses to get the unreached classes.
+<span class="fc" id="L141">        allClasses.removeAll(reached);</span>
+<span class="fc" id="L142">        return allClasses;</span>
+    }
+
+    private DirectedGraph&lt;String&gt; makeGraph(Map&lt;String, Set&lt;String&gt;&gt; deps,
+                                            List&lt;String&gt; moreEdges) {
+<span class="fc" id="L147">        DirectedGraphBuilder&lt;String&gt; builder = getBuilderFromDeps(deps);</span>
+<span class="fc" id="L148">        addEdgesToGraphBuilder(builder, moreEdges);</span>
+<span class="fc" id="L149">        return builder.build();</span>
+    }
+
+    private DirectedGraphBuilder&lt;String&gt; getBuilderFromDeps(Map&lt;String, Set&lt;String&gt;&gt; deps) {
+<span class="fc" id="L153">        DirectedGraphBuilder&lt;String&gt; builder = new DirectedGraphBuilder&lt;&gt;();</span>
+<span class="fc bfc" id="L154" title="All 2 branches covered.">        for (String key : deps.keySet()) {</span>
+<span class="fc bfc" id="L155" title="All 2 branches covered.">            for (String dep : deps.get(key)) {</span>
+<span class="fc" id="L156">                builder.addEdge(key, dep);</span>
+<span class="fc" id="L157">            }</span>
+<span class="fc" id="L158">        }</span>
+<span class="fc" id="L159">        return builder;</span>
+    }
+
+    public Map&lt;String, Set&lt;String&gt;&gt; getDepMap(String pathToUse, List&lt;String&gt; classes)
+            throws IllegalArgumentException {
+<span class="pc bpc" id="L164" title="1 of 2 branches missed.">        if (classes.isEmpty()) {</span>
+            //There are no test classes, no need to waste time with jdeps
+<span class="nc" id="L166">            return null;</span>
+        }
+<span class="fc" id="L168">        List&lt;String&gt; args = new ArrayList&lt;&gt;(Arrays.asList(&quot;-v&quot;));</span>
+<span class="pc bpc" id="L169" title="1 of 2 branches missed.">        if (filterLib) {</span>
+            // TODO: We need a cleaner/generic way to add filters
+<span class="fc" id="L171">            args.addAll(Arrays.asList(&quot;-filter&quot;, &quot;java.*|sun.*&quot;));</span>
+        }
+<span class="fc" id="L173">        List&lt;String&gt; localPaths = getClasspathWithNoJars();</span>
+<span class="pc bpc" id="L174" title="1 of 2 branches missed.">        if (localPaths.isEmpty()) {</span>
+<span class="nc" id="L175">            throw new IllegalArgumentException(&quot;JDEPS cannot run with an empty classpath.&quot;);</span>
+        }
+        String jdepsClassPath;
+<span class="pc bpc" id="L178" title="3 of 8 branches missed.">        if ((!cache.exists() || (cache.isDirectory() &amp;&amp; cache.list().length == 0)) &amp;&amp; useThirdParty) {</span>
+            //There is no cache of jdeps graphs, so we want to run jdeps recursively with the entire surefire classpath
+<span class="nc" id="L180">            LOGGER.log(Level.WARNING, &quot;Should jdeps cache really be empty? Running in recursive mode.&quot;);</span>
+<span class="nc" id="L181">            args.add(&quot;-R&quot;);</span>
+<span class="nc" id="L182">            jdepsClassPath = pathToUse;</span>
+        } else {
+<span class="fc" id="L184">            jdepsClassPath = Writer.pathToString(localPaths);</span>
+        }
+<span class="fc" id="L186">        args.addAll(Arrays.asList(&quot;-cp&quot;, jdepsClassPath));</span>
+<span class="fc" id="L187">        args.addAll(localPaths);</span>
+<span class="fc" id="L188">        LOGGER.log(Level.FINEST, &quot;JDEPS CMD: &quot; + args);</span>
+<span class="fc" id="L189">        Map&lt;String, Set&lt;String&gt;&gt; depMap = RTSUtil.runJdeps(args);</span>
+<span class="pc bpc" id="L190" title="1 of 2 branches missed.">        if (LOGGER.getLoggingLevel().intValue() == Level.FINEST.intValue()) {</span>
+<span class="fc" id="L191">            Writer.writeMapToFile(depMap, artifactsDir + File.separator + &quot;jdeps-out&quot;);</span>
+        }
+<span class="fc" id="L193">        return depMap;</span>
+    }
+
+    private void addEdgesToGraphBuilder(DirectedGraphBuilder&lt;String&gt; builder, List&lt;String&gt; edges) {
+<span class="fc bfc" id="L197" title="All 2 branches covered.">        for (String edge : edges) {</span>
+<span class="fc" id="L198">            String[] parts = edge.split(WHITE_SPACE);</span>
+<span class="pc bpc" id="L199" title="1 of 2 branches missed.">            if (parts.length != 2) {</span>
+<span class="nc" id="L200">                LOGGER.log(Level.SEVERE, &quot;@@BrokenEdge: &quot; + edge);</span>
+<span class="nc" id="L201">                continue;</span>
+            }
+<span class="fc" id="L203">            String src = parts[0].intern();</span>
+<span class="fc" id="L204">            String dest = parts[1].intern();</span>
+<span class="fc" id="L205">            builder.addEdge(src, dest);</span>
+<span class="fc" id="L206">        }</span>
+<span class="fc" id="L207">    }</span>
+
+    public static Map&lt;String, Set&lt;String&gt;&gt; getTransitiveClosurePerClass(DirectedGraph&lt;String&gt; tcGraph,
+                                                                  List&lt;String&gt; classesToAnalyze) {
+<span class="fc" id="L211">        Map&lt;String, Set&lt;String&gt;&gt; tcPerTest = new HashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L212" title="All 2 branches covered.">        for (String test : classesToAnalyze) {</span>
+<span class="fc" id="L213">            Set&lt;String&gt; deps = YasglHelper.computeReachabilityFromChangedClasses(</span>
+<span class="fc" id="L214">                    new HashSet&lt;&gt;(Arrays.asList(test)), tcGraph);</span>
+<span class="fc" id="L215">            deps.add(test);</span>
+<span class="fc" id="L216">            tcPerTest.put(test, deps);</span>
+<span class="fc" id="L217">        }</span>
+<span class="fc" id="L218">        return tcPerTest;</span>
+    }
+
+    public void setSurefireClasspath(Classpath surefireClasspath) {
+<span class="fc" id="L222">        this.surefireClasspath = surefireClasspath;</span>
+<span class="fc" id="L223">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.6.202009150832</span></div></body></html>
