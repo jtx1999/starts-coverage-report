@@ -1,0 +1,26 @@
+GROUP,PACKAGE,CLASS,INSTRUCTION_MISSED,INSTRUCTION_COVERED,BRANCH_MISSED,BRANCH_COVERED,LINE_MISSED,LINE_COVERED,COMPLEXITY_MISSED,COMPLEXITY_COVERED,METHOD_MISSED,METHOD_COVERED
+starts-core,edu.illinois.starts.maven,JavaAgent,6,47,0,6,3,9,1,5,1,2
+starts-core,edu.illinois.starts.maven,MavenCFT.MavenClassVisitor,0,39,1,3,0,8,1,3,0,2
+starts-core,edu.illinois.starts.maven,SurefireMojoInterceptor,22,83,4,4,8,23,5,5,1,5
+starts-core,edu.illinois.starts.maven,AgentLoader,58,214,12,6,10,35,11,10,2,10
+starts-core,edu.illinois.starts.maven,AbstractMojoInterceptor,73,44,0,0,12,13,4,5,4,5
+starts-core,edu.illinois.starts.maven,MavenCFT,0,44,0,4,0,9,0,5,0,3
+starts-core,edu.illinois.starts.maven,MavenCFT.MavenMethodVisitor,0,37,0,0,0,10,0,2,0,2
+starts-core,edu.illinois.starts.constants,StartsConstants,0,10,0,0,0,1,0,1,0,1
+starts-core,edu.illinois.starts.enums,DependencyFormat,0,24,0,0,0,3,0,1,0,1
+starts-core,edu.illinois.starts.util,ChecksumUtil,211,66,18,6,43,10,17,6,6,5
+starts-core,edu.illinois.starts.util,ChecksumUtil.StartsStorer,20,0,0,0,6,0,2,0,2,0
+starts-core,edu.illinois.starts.util,Pair,51,26,8,0,13,7,8,3,4,3
+starts-core,edu.illinois.starts.util,Logger,26,45,2,2,5,12,2,7,1,6
+starts-core,edu.illinois.starts.data,ZLCData,52,48,9,1,11,9,7,3,2,3
+starts-core,edu.illinois.starts.helpers,FileUtil,29,0,4,0,6,0,4,0,2,0
+starts-core,edu.illinois.starts.helpers,YasglHelper,62,110,5,9,18,25,6,8,2,5
+starts-core,edu.illinois.starts.helpers,Writer,269,370,25,23,67,76,22,20,6,12
+starts-core,edu.illinois.starts.helpers,RTSUtil,231,241,12,14,36,34,15,7,5,4
+starts-core,edu.illinois.starts.helpers,EkstaziHelper,290,0,14,0,58,0,16,0,9,0
+starts-core,edu.illinois.starts.helpers,Cache,320,12,26,0,63,5,20,2,7,2
+starts-core,edu.illinois.starts.helpers,ZLCHelper,277,166,24,14,63,34,17,9,3,4
+starts-core,edu.illinois.starts.helpers,PomUtil,120,99,23,9,22,31,16,7,1,6
+starts-core,edu.illinois.starts.helpers,YasglHelper.new GraphVertexVisitor() {...},4,0,0,0,2,0,2,0,2,0
+starts-core,edu.illinois.starts.helpers,Loadables,85,501,21,25,16,94,16,21,0,14
+starts-core,edu.illinois.starts.helpers,YasglHelper.new GraphVertexVisitor() {...},0,4,0,0,0,2,0,2,0,2

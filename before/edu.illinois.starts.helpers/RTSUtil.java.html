@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RTSUtil.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">starts-core</a> &gt; <a href="index.source.html" class="el_package">edu.illinois.starts.helpers</a> &gt; <span class="el_source">RTSUtil.java</span></div><h1>RTSUtil.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2015 - Present. The STARTS Team. All Rights Reserved.
+ */
+
+package edu.illinois.starts.helpers;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.Level;
+
+import edu.illinois.starts.constants.StartsConstants;
+import edu.illinois.starts.util.ChecksumUtil;
+import edu.illinois.starts.util.Logger;
+import edu.illinois.yasgl.DirectedGraph;
+import org.apache.maven.plugin.MojoExecutionException;
+import org.ekstazi.data.RegData;
+
+/**
+ * Some utility methods that are needed for RTS.
+ */
+<span class="nc" id="L31">public class RTSUtil implements StartsConstants {</span>
+<span class="fc" id="L32">    private static final Logger LOGGER = Logger.getGlobal();</span>
+    /** Name of tools.jar in JDK */
+    private static final String TOOLS_JAR_NAME = &quot;tools.jar&quot;;
+    /** Name of tools.jar on Mac in JDK */
+    private static final String CLASSES_JAR_NAME = &quot;classes.jar&quot;;
+
+    public static void saveForNextRun(String artifactsDir, DirectedGraph&lt;String&gt; graph,
+                                      boolean printGraph, String graphFile) {
+<span class="nc" id="L40">        long start = System.currentTimeMillis();</span>
+<span class="nc" id="L41">        Writer.writeGraph(graph, artifactsDir, printGraph, graphFile);</span>
+<span class="nc" id="L42">        long end = System.currentTimeMillis();</span>
+<span class="nc" id="L43">        LOGGER.log(Level.FINEST, &quot;[TIME]WRITING FILES: &quot; + (end - start) + MILLISECOND);</span>
+<span class="nc" id="L44">    }</span>
+
+    public static void computeAndSaveNewCheckSums(String artifactsDir,
+                                                  Set&lt;String&gt; affectedTests,
+                                                  Map&lt;String, Set&lt;String&gt;&gt; testDeps,
+                                                  ClassLoader loader) throws MojoExecutionException {
+        long start;
+        long end;
+<span class="nc" id="L52">        start = System.currentTimeMillis();</span>
+<span class="nc" id="L53">        Map&lt;String, Set&lt;RegData&gt;&gt; newCheckSums = ChecksumUtil.makeCheckSumMap(loader, testDeps, affectedTests);</span>
+<span class="nc" id="L54">        end = System.currentTimeMillis();</span>
+<span class="nc" id="L55">        LOGGER.log(Level.FINEST, &quot;[TIME]UPDATING CHECKSUMS: &quot; + (end - start) + MILLISECOND);</span>
+<span class="nc" id="L56">        start = System.currentTimeMillis();</span>
+<span class="nc" id="L57">        ChecksumUtil.saveCheckSums(newCheckSums, artifactsDir);</span>
+        try {
+<span class="nc" id="L59">            new File(artifactsDir, EkstaziHelper.notFirstRunMarker).createNewFile();</span>
+<span class="nc" id="L60">        } catch (IOException ioe) {</span>
+<span class="nc" id="L61">            throw new MojoExecutionException(ioe.getMessage());</span>
+<span class="nc" id="L62">        }</span>
+<span class="nc" id="L63">        end = System.currentTimeMillis();</span>
+<span class="nc" id="L64">        LOGGER.log(Level.FINEST, &quot;[TIME]RE-SAVING CHECKSUMS: &quot; + (end - start) + MILLISECOND);</span>
+<span class="nc" id="L65">    }</span>
+
+    /**
+     * This method computes the affected tests and sets the &quot;changed&quot; field to
+     * contain the set of dependencies that changed since the last run.
+     */
+    public static Set&lt;String&gt; computeAffectedTests(HashSet&lt;String&gt; allTests, Set&lt;String&gt; nonAffected,
+                                                   Map&lt;String, Set&lt;String&gt;&gt; testDeps) {
+<span class="nc" id="L73">        long start = System.currentTimeMillis();</span>
+<span class="nc" id="L74">        Set&lt;String&gt; affectedTests = new HashSet&lt;&gt;(allTests);</span>
+<span class="nc" id="L75">        affectedTests.removeAll(nonAffected);</span>
+<span class="nc" id="L76">        long end = System.currentTimeMillis();</span>
+<span class="nc" id="L77">        LOGGER.log(Level.FINEST, &quot;[TIME]COMPUTING AFFECTED: &quot; + (end - start) + MILLISECOND);</span>
+<span class="nc" id="L78">        return affectedTests;</span>
+    }
+
+    public static Map&lt;String, Set&lt;String&gt;&gt; runJdeps(List&lt;String&gt; args) {
+<span class="fc" id="L82">        StringWriter output = new StringWriter();</span>
+<span class="fc" id="L83">        LOGGER.log(Level.FINE, &quot;JDEPS ARGS:&quot; + args);</span>
+
+        try {
+<span class="fc" id="L86">            File toolsJarFile = findToolsJar();</span>
+<span class="pc bpc" id="L87" title="1 of 2 branches missed.">            if (!toolsJarFile.exists()) {</span>
+                // Java 9+, load jdeps through java.util.spi.ToolProvider
+<span class="nc" id="L89">                Class&lt;?&gt; toolProvider = ClassLoader.getSystemClassLoader().loadClass(&quot;java.util.spi.ToolProvider&quot;);</span>
+<span class="nc" id="L90">                Object jdeps = toolProvider.getMethod(&quot;findFirst&quot;, String.class).invoke(null, &quot;jdeps&quot;);</span>
+<span class="nc" id="L91">                toolProvider.getMethod(&quot;run&quot;, PrintWriter.class, PrintWriter.class, String[].class)</span>
+<span class="nc" id="L92">                        .invoke(jdeps, new PrintWriter(output), new PrintWriter(output), args.toArray(new String[0]));</span>
+<span class="nc" id="L93">            } else {</span>
+                // Java 8, load tools.jar
+<span class="fc" id="L95">                URLClassLoader loader = new URLClassLoader(new URL[] { toolsJarFile.toURI().toURL() },</span>
+<span class="fc" id="L96">                        ClassLoader.getSystemClassLoader());</span>
+<span class="fc" id="L97">                Class&lt;?&gt; jdepsMain = loader.loadClass(&quot;com.sun.tools.jdeps.Main&quot;);</span>
+<span class="fc" id="L98">                jdepsMain.getMethod(&quot;run&quot;, String[].class, PrintWriter.class)</span>
+<span class="fc" id="L99">                        .invoke(null, args.toArray(new String[0]), new PrintWriter(output));</span>
+            }
+<span class="nc" id="L101">        } catch (Exception ex) {</span>
+<span class="nc" id="L102">            ex.printStackTrace();</span>
+<span class="fc" id="L103">        }</span>
+        // jdeps can return an empty output when run on .jar files with no .class files
+<span class="pc bpc" id="L105" title="1 of 2 branches missed.">        return output.getBuffer().length() != 0 ? getDepsFromJdepsOutput(output) : new HashMap&lt;String, Set&lt;String&gt;&gt;();</span>
+    }
+
+    private static File findToolsJar() {
+<span class="fc" id="L109">        String javaHome = System.getProperty(&quot;java.home&quot;);</span>
+<span class="fc" id="L110">        File javaHomeFile = new File(javaHome);</span>
+<span class="fc" id="L111">        File toolsJarFile = new File(javaHomeFile, &quot;lib&quot; + File.separator + TOOLS_JAR_NAME);</span>
+
+<span class="pc bpc" id="L113" title="1 of 2 branches missed.">        if (!toolsJarFile.exists()) {</span>
+<span class="fc" id="L114">            toolsJarFile = new File(System.getenv(&quot;java_home&quot;), &quot;lib&quot; + File.separator + TOOLS_JAR_NAME);</span>
+        }
+
+<span class="pc bpc" id="L117" title="2 of 4 branches missed.">        if (!toolsJarFile.exists() &amp;&amp; javaHomeFile.getAbsolutePath().endsWith(File.separator + &quot;jre&quot;)) {</span>
+<span class="fc" id="L118">            javaHomeFile = javaHomeFile.getParentFile();</span>
+<span class="fc" id="L119">            toolsJarFile = new File(javaHomeFile, &quot;lib&quot; + File.separator + TOOLS_JAR_NAME);</span>
+        }
+
+<span class="pc bpc" id="L122" title="5 of 6 branches missed.">        if (!toolsJarFile.exists() &amp;&amp; isMac() &amp;&amp; javaHomeFile.getAbsolutePath().endsWith(File.separator + &quot;Home&quot;)) {</span>
+<span class="nc" id="L123">            javaHomeFile = javaHomeFile.getParentFile();</span>
+<span class="nc" id="L124">            toolsJarFile = new File(javaHomeFile, &quot;Classes&quot; + File.separator + CLASSES_JAR_NAME);</span>
+        }
+
+<span class="fc" id="L127">        return toolsJarFile;</span>
+    }
+
+    private static boolean isMac() {
+<span class="nc" id="L131">        return System.getProperty(&quot;os.name&quot;).toLowerCase().contains(&quot;mac&quot;);</span>
+    }
+
+    public static Map&lt;String, Set&lt;String&gt;&gt; getDepsFromJdepsOutput(StringWriter jdepsOutput) {
+<span class="fc" id="L135">        Map&lt;String, Set&lt;String&gt;&gt; deps = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L136">        List&lt;String&gt; lines = Arrays.asList(jdepsOutput.toString().split(System.lineSeparator()));</span>
+<span class="fc bfc" id="L137" title="All 2 branches covered.">        for (String line : lines) {</span>
+<span class="fc" id="L138">            String[] parts = line.split(&quot;-&gt;&quot;);</span>
+<span class="fc" id="L139">            String left = parts[0].trim();</span>
+<span class="pc bpc" id="L140" title="2 of 6 branches missed.">            if (left.startsWith(CLASSES) || left.startsWith(TEST_CLASSES) || left.endsWith(JAR_EXTENSION)) {</span>
+<span class="nc" id="L141">                continue;</span>
+            }
+<span class="fc" id="L143">            String right = parts[1].trim().split(WHITE_SPACE)[0];</span>
+<span class="fc bfc" id="L144" title="All 2 branches covered.">            if (deps.keySet().contains(left)) {</span>
+<span class="fc" id="L145">                deps.get(left).add(right);</span>
+            } else {
+<span class="fc" id="L147">                deps.put(left, new HashSet&lt;&gt;(Arrays.asList(right)));</span>
+            }
+<span class="fc" id="L149">        }</span>
+<span class="fc" id="L150">        return deps;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.6.202009150832</span></div></body></html>

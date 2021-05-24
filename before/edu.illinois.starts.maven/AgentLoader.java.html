@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AgentLoader.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">starts-core</a> &gt; <a href="index.source.html" class="el_package">edu.illinois.starts.maven</a> &gt; <span class="el_source">AgentLoader.java</span></div><h1>AgentLoader.java</h1><pre class="source lang-java linenums">package edu.illinois.starts.maven;
+
+import java.io.File;
+import java.lang.management.ManagementFactory;
+import java.lang.reflect.Method;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
+
+import edu.illinois.starts.constants.StartsConstants;
+
+/**
+ * This class is duplicated from Ekstazi, with minor changes.
+ */
+<span class="nc" id="L15">public final class AgentLoader implements StartsConstants {</span>
+    private static final String TOOLS_JAR_NAME = &quot;tools.jar&quot;;
+    private static final String CLASSES_JAR_NAME = &quot;classes.jar&quot;;
+    private static final String LIB = &quot;lib&quot;;
+<span class="fc" id="L19">    private static final String AGENT_INIT = AgentLoader.class.getName() + &quot; Initialized&quot;;</span>
+
+    public static boolean loadDynamicAgent() {
+        try {
+<span class="pc bpc" id="L23" title="1 of 2 branches missed.">            if (System.getProperty(AGENT_INIT) != null) {</span>
+<span class="nc" id="L24">                return true;</span>
+            }
+<span class="fc" id="L26">            System.setProperty(AGENT_INIT, EMPTY);</span>
+
+<span class="fc" id="L28">            URL agentJarURL = AbstractMojoInterceptor.class.getResource(&quot;JavaAgent.class&quot;);</span>
+<span class="fc" id="L29">            URL agentJarURLConnection = AbstractMojoInterceptor.extractJarURL(agentJarURL);</span>
+<span class="fc" id="L30">            return loadAgent(agentJarURLConnection);</span>
+<span class="nc" id="L31">        } catch (Exception ex) {</span>
+<span class="nc" id="L32">            ex.printStackTrace();</span>
+<span class="nc" id="L33">            return false;</span>
+        }
+    }
+
+    public static boolean loadAgent(URL aju) throws Exception {
+<span class="fc" id="L38">        URL toolsJarFile = findToolsJar();</span>
+
+<span class="fc" id="L40">        Class&lt;?&gt; vc = loadVirtualMachine(new URL[]{toolsJarFile});</span>
+<span class="pc bpc" id="L41" title="1 of 2 branches missed.">        if (vc == null) {</span>
+<span class="nc" id="L42">            return false;</span>
+        }
+
+<span class="fc" id="L45">        attachAgent(vc, aju);</span>
+<span class="fc" id="L46">        return true;</span>
+    }
+
+    private static void attachAgent(Class&lt;?&gt; vc, URL aju) throws Exception {
+<span class="fc" id="L50">        String pid = getPID();</span>
+<span class="fc" id="L51">        String agentAbsolutePath = new File(aju.toURI().getSchemeSpecificPart()).getAbsolutePath();</span>
+
+<span class="fc" id="L53">        Object vm = getAttachMethod(vc).invoke(null, new Object[]{pid});</span>
+<span class="fc" id="L54">        getLoadAgentMethod(vc).invoke(vm, new Object[]{agentAbsolutePath});</span>
+<span class="fc" id="L55">        getDetachMethod(vc).invoke(vm);</span>
+<span class="fc" id="L56">    }</span>
+
+    private static Method getAttachMethod(Class&lt;?&gt; vc) throws SecurityException, NoSuchMethodException {
+<span class="fc" id="L59">        return vc.getMethod(&quot;attach&quot;, new Class&lt;?&gt;[]{String.class});</span>
+    }
+
+    private static Method getLoadAgentMethod(Class&lt;?&gt; vc) throws SecurityException, NoSuchMethodException {
+<span class="fc" id="L63">        return vc.getMethod(&quot;loadAgent&quot;, new Class[]{String.class});</span>
+    }
+
+    private static Method getDetachMethod(Class&lt;?&gt; vc) throws SecurityException, NoSuchMethodException {
+<span class="fc" id="L67">        return vc.getMethod(&quot;detach&quot;);</span>
+    }
+
+    private static Class&lt;?&gt; loadVirtualMachine(URL[] urls) throws Exception {
+        try {
+<span class="nc" id="L72">            return ClassLoader.getSystemClassLoader().loadClass(&quot;com.sun.tools.attach.VirtualMachine&quot;);</span>
+<span class="fc" id="L73">        } catch (ClassNotFoundException ex) {</span>
+<span class="fc" id="L74">            URLClassLoader loader = new URLClassLoader(urls, ClassLoader.getSystemClassLoader());</span>
+<span class="fc" id="L75">            return loader.loadClass(&quot;com.sun.tools.attach.VirtualMachine&quot;);</span>
+        }
+    }
+
+    private static String getPID() {
+<span class="fc" id="L80">        String vmName = ManagementFactory.getRuntimeMXBean().getName();</span>
+<span class="fc" id="L81">        return vmName.substring(0, vmName.indexOf(&quot;@&quot;));</span>
+    }
+
+    private static URL findToolsJar() throws MalformedURLException {
+<span class="fc" id="L85">        String javaHome = System.getProperty(JAVA_HOME);</span>
+<span class="fc" id="L86">        File javaHomeFile = new File(javaHome);</span>
+<span class="fc" id="L87">        File tjf = new File(javaHomeFile, LIB + File.separator + TOOLS_JAR_NAME);</span>
+
+<span class="pc bpc" id="L89" title="1 of 2 branches missed.">        if (!tjf.exists()) {</span>
+<span class="fc" id="L90">            tjf = new File(System.getenv(&quot;java_home&quot;), LIB + File.separator + TOOLS_JAR_NAME);</span>
+        }
+
+<span class="pc bpc" id="L93" title="2 of 4 branches missed.">        if (!tjf.exists() &amp;&amp; javaHomeFile.getAbsolutePath().endsWith(File.separator + &quot;jre&quot;)) {</span>
+<span class="fc" id="L94">            javaHomeFile = javaHomeFile.getParentFile();</span>
+<span class="fc" id="L95">            tjf = new File(javaHomeFile, LIB + File.separator + TOOLS_JAR_NAME);</span>
+        }
+
+<span class="pc bpc" id="L98" title="5 of 6 branches missed.">        if (!tjf.exists() &amp;&amp; isMac() &amp;&amp; javaHomeFile.getAbsolutePath().endsWith(File.separator + &quot;Home&quot;)) {</span>
+<span class="nc" id="L99">            javaHomeFile = javaHomeFile.getParentFile();</span>
+<span class="nc" id="L100">            tjf = new File(javaHomeFile, &quot;Classes&quot; + File.separator + CLASSES_JAR_NAME);</span>
+        }
+
+<span class="fc" id="L103">        return tjf.toURI().toURL();</span>
+    }
+
+    private static boolean isMac() {
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        return System.getProperty(&quot;os.name&quot;).toLowerCase().indexOf(&quot;mac&quot;) &gt;= 0;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.6.202009150832</span></div></body></html>
